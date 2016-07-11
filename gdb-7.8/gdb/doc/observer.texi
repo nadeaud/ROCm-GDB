@@ -160,6 +160,11 @@ Note that when @value{GDBN} calls this observer, the library's
 symbols have not been unloaded yet, and thus are still available.
 @end deftypefun
 
+@deftypefun void symbol_loaded (void)
+New symbols have been loaded by GDB following the loading of 
+a library.
+@end deftypefun
+
 @deftypefun void new_objfile (struct objfile *@var{objfile})
 The symbol file specified by @var{objfile} has been loaded.
 Called with @var{objfile} equal to @code{NULL} to indicate

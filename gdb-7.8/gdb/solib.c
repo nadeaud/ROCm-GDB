@@ -981,6 +981,9 @@ solib_add (char *pattern, int from_tty,
 
 	ops->special_symbol_handling ();
       }
+
+    if(loaded_any_symbols)
+      observer_notify_symbol_loaded ();
   }
 }
 

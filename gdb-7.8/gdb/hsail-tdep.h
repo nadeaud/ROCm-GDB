@@ -81,6 +81,11 @@ void hsail_tdep_unmap_shm_buffer(void* pShm);
 
 bool hsail_tdep_save_isa(bool is_disassemble_command, const char* hsail_isa_file_name);
 
+/* HSAIL Observers */
+void hsail_symbol_observer(void);
+
+void hsail_library_observer(struct so_list *solib);
+
 /*
  * Get the keys and max sizes for all shared memory segments.
  *

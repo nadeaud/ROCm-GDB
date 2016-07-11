@@ -72,6 +72,7 @@
 #include "target-descriptions.h"
 #include "filestuff.h"
 #include "objfiles.h"
+#include "observer.h"
 
 /*
  * HSAIL includes
@@ -5140,6 +5141,13 @@ Enables printf debugging output."),
   sigdelset (&suspend_mask, SIGALRM);
 
   /* End HSAIL Specific signal edits*/
+
+  /* HSAIL Specific observers */
+
+  observer_attach_solib_loaded(hsail_library_observer);
+  observer_attach_symbol_loaded(hsail_symbol_observer);
+
+  /* End HSAIL Specific observers. */
 
   sigemptyset (&blocked_mask);
 }

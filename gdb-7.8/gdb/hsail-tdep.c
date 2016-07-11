@@ -47,6 +47,9 @@
 #include "ui-out.h"
 #include "valprint.h"
 #include "value.h"
+#include "observer.h"
+#include "solist.h"
+#include "breakpoint.h"
 
 /* GDB headers for kill and quit command
  * Added so that handle_hsail_event can call the kill and quit functions at the CLI level
@@ -95,6 +98,30 @@ static int gs_num_active_waves=-1;
 
 static bool gs_stage2_has_run = false;
 
+static bool is_GPUDebugSDK_loaded = false;
+static bool breakpoint_installed = false;
+
+void hsail_symbol_observer(void)
+{
+  if(is_GPUDebugSDK_loaded && !breakpoint_installed)
+    {
+      char * hsaBreakpointLocation = "TriggerGPUBreakpointStop";
+
+      create_hsa_gpu_breakpoint_trigger(hsaBreakpointLocation);
+
+      printf("GPUDebug breakpoint installed\n.");
+      breakpoint_installed = true;
+    }
+}
+
+void hsail_library_observer(struct so_list *solib)
+{
+  if(strstr(solib->so_original_name, "libAMDGPUDebugHSA-x64") != NULL)
+    {
+      printf("Library %s loaded\n", solib->so_original_name);
+      is_GPUDebugSDK_loaded = true;
+    }
+}
 
 /*
  * The close down function hsail_linux_close resets the gs_stage2_has_run to false
@@ -106,7 +133,7 @@ void hsail_linux_initialize_stg2(void)
    * */
 
   struct ui_out* uiout = current_uiout;
-  char * hsaBreakpointLocation = "TriggerGPUBreakpointStop";
+//  char * hsaBreakpointLocation = "TriggerGPUBreakpointStop";
 
   int fd = 0;
 
@@ -132,7 +159,7 @@ void hsail_linux_initialize_stg2(void)
       /* Place the breakpoint in the GPUDebugSDK library
        * that will be hit when a gpu breakpoint is hit.
        */
-      create_hsa_gpu_breakpoint_trigger(hsaBreakpointLocation);
+//      create_hsa_gpu_breakpoint_trigger(hsaBreakpointLocation);
 
       /*
        * The shared memory for the dbe binary is created in the agent
@@ -830,6 +857,7 @@ void handle_hsail_event(int err, gdb_client_data client_data)
       {
         case HSAIL_NOTIFY_NEW_BINARY:
           {
+            /* This is the last event before the kernel is processed, the IDE should be notified here. */
             /* On this event,
              * 1) Free any existing debug facilities objects. We can do this since we know that
              * only one binary is active at any point in time, so the new binary notification
