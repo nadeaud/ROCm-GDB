@@ -161,6 +161,57 @@ mi_argv_to_format (char **argv, int argc)
   return ret;
 }
 
+/* Insert GPU Breakpoint
+ *
+ */
+
+static void
+mi_cmd_rocm_break_insert_1(int dprintf, char *command, char **argv, int argc)
+{
+  int line_number = 0;
+  struct breakpoint *b = NULL;
+
+  b = XNEW(struct breakpoint);
+  gdb_assert(b != NULL);
+  memset(b, 0, sizeof(*b));
+
+
+
+  enum opt
+  {
+    LINE_OPT, KERNEL_NAME_OPT,
+  };
+
+  static const struct mi_opt opts[] =
+      {
+	  {"l", LINE_OPT, 1},
+	  {"n", KERNEL_NAME_OPT, 1},
+	  {0,0,0}
+      };
+
+  int oind;
+  char *oarg;
+
+  while(1)
+    {
+      int opt = mi_getopt("-rocm-break-insert", argc, argv,
+	   opts, &oind, &oarg);
+
+      if(opt < 0)
+	break;
+      switch( (enum opt) opt)
+      {
+	case LINE_OPT:
+	  line_number = atol (oarg);
+	  break;
+	case KERNEL_NAME_OPT:
+	  // To implement
+	  break;
+      }
+    }
+
+}
+
 /* Insert breakpoint.
    If dprintf is true, it will insert dprintf.
    If not, it will insert other type breakpoint.  */
@@ -297,6 +348,12 @@ mi_cmd_break_insert_1 (int dprintf, char *command, char **argv, int argc)
 		     pending ? AUTO_BOOLEAN_TRUE : AUTO_BOOLEAN_FALSE,
 		     ops, 0, enabled, 0, 0);
   do_cleanups (back_to);
+}
+
+void
+mi_cmd_rocm_break_insert (char *command, char **argv, int argc)
+{
+  mi_cmd_rocm_break_insert_1 (0, command, argv, argc);
 }
 
 /* Implements the -break-insert command.

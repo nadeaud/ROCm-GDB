@@ -9839,6 +9839,16 @@ decode_static_tracepoint_spec (char **arg_p)
   return sals;
 }
 
+/* Logic to parse the breakpoint request from CLI
+ *
+ */
+static int parse_create_breakpoint_hsail(struct gbarch *gbarch,
+					 char *arg, int internal,
+					 const struct breakpoint_ops *ops)
+{
+
+}
+
 
 static int
 create_breakpoint_hsail(struct gdbarch *gdbarch,
