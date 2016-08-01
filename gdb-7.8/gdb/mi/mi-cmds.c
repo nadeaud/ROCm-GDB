@@ -177,7 +177,7 @@ static struct mi_cmd mi_cmds[] =
   DEF_MI_CMD_MI ("var-show-attributes", mi_cmd_var_show_attributes),
   DEF_MI_CMD_MI ("var-show-format", mi_cmd_var_show_format),
   DEF_MI_CMD_MI ("var-update", mi_cmd_var_update),
-  DEF_MI_CMD_MI ("rocm-break-insert", )
+  DEF_MI_CMD_MI ("rocm-break-insert", mi_cmd_rocm_break_insert),
   { NULL, }
 };
 

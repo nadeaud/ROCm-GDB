@@ -33,6 +33,11 @@
 #include "gdb_obstack.h"
 #include <ctype.h>
 
+/* Hsail Includes */
+#include "hsail-breakpoint.h"
+#include "utils.h"
+#include "language.h"
+
 enum
   {
     FROM_TTY = 0
@@ -170,12 +175,7 @@ mi_cmd_rocm_break_insert_1(int dprintf, char *command, char **argv, int argc)
 {
   int line_number = 0;
   struct breakpoint *b = NULL;
-
-  b = XNEW(struct breakpoint);
-  gdb_assert(b != NULL);
-  memset(b, 0, sizeof(*b));
-
-
+  HsailBreakpointRequest hsail_bp_request;
 
   enum opt
   {
@@ -192,6 +192,55 @@ mi_cmd_rocm_break_insert_1(int dprintf, char *command, char **argv, int argc)
   int oind;
   char *oarg;
 
+  b = XNEW(struct breakpoint);
+  gdb_assert(b != NULL);
+  memset(b, 0, sizeof(*b));
+
+  b->ops = &bkpt_breakpoint_ops;
+  b->type = bp_hsail;
+  b->related_breakpoint = b;
+
+  b->gdbarch = get_current_arch();
+  b->language = current_language->la_language;
+  b->input_radix = input_radix;
+  b->thread = -1;
+  b->enable_state = bp_enabled;
+  b->next = 0;
+  b->silent = 0;
+  b->ignore_count = 0;
+  b->commands = NULL;
+  b->frame_id = null_frame_id;
+  b->condition_not_parsed = 0;
+  b->py_bp_object = NULL;
+
+  b->hsail_bp_request = (HsailBreakpointRequest*)xmalloc(sizeof(HsailBreakpointRequest));
+  gdb_assert(NULL != b->hsail_bp_request);
+  memset(b->hsail_bp_request, 0, sizeof(HsailBreakpointRequest));
+
+  /* Added for info breakpoints, so that "info bre" does not say "del" for the bp
+   *
+   * Dont touch sounds more correct anyways since we dont want to gdb to mess
+   * with HSAIL breakpoints by deleting or recreating on hit
+   * */
+  b->disposition = disp_donttouch;
+
+  b->hsail_bp_request->gdb_bkpt = b;
+  /*
+   * \todo Perhaad Note: This ifdef is only added for now since I
+   * are working on two places, the agent (for statistics)
+   * and on line information resolving.
+   * The ifdef allows me to quickly change this functions behavior
+   */
+
+  // If no line number of kernel name is given, it is an "any" breakpoint
+  b->hsail_bp_request->type = HSAIL_BP_TYPE_UNKNOWN;
+
+  // Parsing the breakpoint request and fill in hsail_bp_request
+  //hsail_breakpoint_clear_bp_request(&hsail_bp_request);
+  hsail_bp_request.condition.condition_code = HSAIL_BREAKPOINT_CONDITION_ANY;
+  hsail_bp_request.bp.source_location.file_name = NULL;
+  hsail_bp_request.bp.source_location.src_line = NULL;
+
   while(1)
     {
       int opt = mi_getopt("-rocm-break-insert", argc, argv,
@@ -203,13 +252,19 @@ mi_cmd_rocm_break_insert_1(int dprintf, char *command, char **argv, int argc)
       {
 	case LINE_OPT:
 	  line_number = atol (oarg);
+	  hsail_bp_request.type = HSAIL_BP_TYPE_SOURCE_LOCATION;
+	  //free_current_contents(&(hsail_bp_request.bp.source_location.file_name));
+	  hsail_bp_request.bp.source_location.line_num = (HwDbgInfo_linenum) line_number;
 	  break;
 	case KERNEL_NAME_OPT:
 	  // To implement
 	  break;
+	default:
+	  break;
       }
     }
 
+  create_breakpoint_hsail(b, &hsail_bp_request, 0);
 }
 
 /* Insert breakpoint.

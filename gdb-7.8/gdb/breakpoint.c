@@ -9839,23 +9839,11 @@ decode_static_tracepoint_spec (char **arg_p)
   return sals;
 }
 
-/* Logic to parse the breakpoint request from CLI
- *
- */
-static int parse_create_breakpoint_hsail(struct gbarch *gbarch,
-					 char *arg, int internal,
-					 const struct breakpoint_ops *ops)
+int
+create_breakpoint_hsail(struct breakpoint *b,
+			HsailBreakpointRequest *hsail_bp_request,
+			int internal)
 {
-
-}
-
-
-static int
-create_breakpoint_hsail(struct gdbarch *gdbarch,
-                        char *arg, int internal,
-                        const struct breakpoint_ops *ops)
-{
-  struct breakpoint *b = NULL;
   struct ui_out *uiout = current_uiout;
 
   int hsail_line_num = -1;
@@ -9864,90 +9852,11 @@ create_breakpoint_hsail(struct gdbarch *gdbarch,
   char* file_name = NULL;
   char* src_line = NULL;
   HwDbgInfo_debug hsail_facilities = NULL;
-  HsailBreakpointRequest hsail_bp_request;
   HsailBreakpointType hsail_bp_type = HSAIL_BP_TYPE_UNKNOWN;
-
 
   /* We need to initialize the request cache if it has not already been done
    * */
   hsail_initialize_command_buffer();
-
-  b = XNEW (struct breakpoint);
-  gdb_assert(NULL != b);
-  memset (b, 0, sizeof (*b));
-
-  b->ops = ops;
-  b->type = bp_hsail;
-  b->related_breakpoint = b;
-  /*
-   * The below initialization steps have been done as per
-   * init_raw_breakpoint_without_location (struct breakpoint *b,
-                    struct gdbarch *gdbarch,
-                    enum bptype bptype,
-                    const struct breakpoint_ops *ops)
-   */
-  b->gdbarch = gdbarch;
-  b->language = current_language->la_language;
-  b->input_radix = input_radix;
-  b->thread = -1;
-  b->enable_state = bp_enabled;
-  b->next = 0;
-  b->silent = 0;
-  b->ignore_count = 0;
-  b->commands = NULL;
-  b->frame_id = null_frame_id;
-  b->condition_not_parsed = 0;
-  b->py_bp_object = NULL;
-  b->related_breakpoint = b;
-
-  b->hsail_bp_request = (HsailBreakpointRequest*)xmalloc(sizeof(HsailBreakpointRequest));
-  gdb_assert(NULL != b->hsail_bp_request);
-  memset(b->hsail_bp_request, 0, sizeof(HsailBreakpointRequest));
-
-  b->hsail_bp_request->type = HSAIL_BP_TYPE_UNKNOWN;
-  /* Added for info breakpoints, so that "info bre" does not say "del" for the bp
-   *
-   * Dont touch sounds more correct anyways since we dont want to gdb to mess
-   * with HSAIL breakpoints by deleting or recreating on hit
-   * */
-  b->disposition = disp_donttouch;
-
-  b->hsail_bp_request->gdb_bkpt = b;
-  /*
-   * \todo Perhaad Note: This ifdef is only added for now since I
-   * are working on two places, the agent (for statistics)
-   * and on line information resolving.
-   * The ifdef allows me to quickly change this functions behavior
-   */
-
-/* #define HSAIL_PC_BP */
-
-#ifdef HSAIL_PC_BP
-  /* This declaration will warn if the pragama is set.
-   * But its only an internal usage option and removes the confusion between
-   * hsail_pc and hsail_line_num
-   * */
-  int hsail_pc = -1;
-  /* This version should only accept the hsail:123 and hsail:file_name:123 formats
-   * (and ignore the file name in the second case: */
-  memset(&hsail_bp_req, 0, sizeof(HsailBreakpointRequest));
-  if (hsail_parse_breakpoint_request(arg, &hsail_bp_req))
-  {
-    if (HSAIL_BP_TYPE_SOURCE_LOCATION == hsail_bp_req.type)
-    {
-      /* Choose a number divisible by 4 and valid op
-       * We need a PC divisible by 4 since we can only set a breakpoint
-       * on a PC divisible by 4
-       */
-      hsail_pc = (int)hsail_bp_req.bp.source_location.line_num;
-      gdb_assert(hsail_pc != -1);
-      gdb_assert(hsail_pc % 4 == 0);
-      b->hsail_pc = hsail_pc;
-    }
-  }
-  hsail_clear_bp_request(&hsail_bp_req);
-
-#endif /* HSAIL_PC_BP */
 
   /*
    * \todo implement a "hsail_bkpt_print_mention" function to overwrite GDB printing
@@ -9961,6 +9870,9 @@ create_breakpoint_hsail(struct gdbarch *gdbarch,
    */
   install_breakpoint(internal, b, 1);
 
+  hsail_bp_request->number = b->number;
+  hsail_bp_request->gdb_bkpt = b;
+
 #ifdef HSAIL_PC_BP
 
   if (HSAIL_BP_TYPE_SOURCE_LOCATION == hsail_bp_type)
@@ -9970,71 +9882,58 @@ create_breakpoint_hsail(struct gdbarch *gdbarch,
 
 #else /* HSAIL_PC_BP */
 
-  /* Attempt to parse the request. Since we used the same function to check if
-   * this is an HSAIL breakpoint, this function will only fail if we're out of
-   * memory or something unexpected happened: */
-  memset(&hsail_bp_request, 0, sizeof(HsailBreakpointRequest));
-  hsail_bp_type = HSAIL_BP_TYPE_UNKNOWN;
+  hsail_bp_type = hsail_bp_request->type;
 
-  if (hsail_breakpoint_parse_bp_request(arg, &hsail_bp_request))
+  switch (hsail_bp_type)
   {
-    /* Handle each breakpoint type: */
-    hsail_bp_request.number = b->number;
-    hsail_bp_request.gdb_bkpt = b;
-
-    hsail_bp_type = hsail_bp_request.type;
-
-    switch (hsail_bp_type)
-    {
     case HSAIL_BP_TYPE_KERNEL_FUNCTION:
       {
-        /* If no hsail initialized:Save the request in the request buffer
-         * If hsail initialized: write to fifo.
-         * */
-        hsail_breakpoint_set_from_kernel_name(&hsail_bp_request);
+	/* If no hsail initialized:Save the request in the request buffer
+	 * If hsail initialized: write to fifo.
+	 * */
+	hsail_breakpoint_set_from_kernel_name(hsail_bp_request);
       }
       break;
 
     case HSAIL_BP_TYPE_SOURCE_LOCATION:
       {
-        /* If no hsail initialized or no debug facilitities:
-         * This function will save the request in the request buffer
-         * else it will resolve and write to fifo.
-         *
-         * We can enqueue the packet on the FIFO since the bp's GDB ID is
-         * set by the install_breakpoint function
-         * We use the same command since we do rocm:LINE_NUM
-         */
-        hsail_breakpoint_set_from_line(&hsail_bp_request);
+	/* If no hsail initialized or no debug facilitities:
+	 * This function will save the request in the request buffer
+	 * else it will resolve and write to fifo.
+	 *
+	 * We can enqueue the packet on the FIFO since the bp's GDB ID is
+	 * set by the install_breakpoint function
+	 * We use the same command since we do rocm:LINE_NUM
+	 */
+	hsail_breakpoint_set_from_line(hsail_bp_request);
       }
       break;
 
     case HSAIL_BP_TYPE_ANY_LOCATION:
       {
-        /* If no hsail initialized:Save the request in the request buffer
-         * If hsail initialized: write to fifo.
-         * */
-        const char* any_kernel_symbol = "*";
-        hsail_bp_request.bp.kernel_func.func_name = xmalloc(strlen(any_kernel_symbol)+1);
-        gdb_assert(hsail_bp_request.bp.kernel_func.func_name != NULL);
+	/* If no hsail initialized:Save the request in the request buffer
+	 * If hsail initialized: write to fifo.
+	 * */
+	const char* any_kernel_symbol = "*";
+	hsail_bp_request->bp.kernel_func.func_name = xmalloc(strlen(any_kernel_symbol)+1);
+	gdb_assert(hsail_bp_request->bp.kernel_func.func_name != NULL);
 
-        memset(hsail_bp_request.bp.kernel_func.func_name,
-               '\0',
-               strlen(any_kernel_symbol)+1);
+	memset(hsail_bp_request->bp.kernel_func.func_name,
+	       '\0',
+	       strlen(any_kernel_symbol)+1);
 
-        strcpy(hsail_bp_request.bp.kernel_func.func_name, any_kernel_symbol);
+	strcpy(hsail_bp_request->bp.kernel_func.func_name, any_kernel_symbol);
 
-        hsail_breakpoint_set_any(&hsail_bp_request);
+	hsail_breakpoint_set_any(hsail_bp_request);
       }
       break;
     case HSAIL_BP_TYPE_UNKNOWN:
       {
-        gdb_assert(0);
+	gdb_assert(0);
       }
-    }
   }
 
-  hsail_breakpoint_clear_bp_request(&hsail_bp_request);
+  hsail_breakpoint_clear_bp_request(hsail_bp_request);
   /*Print the breakpoint info in the form of GPU breakpoint #No#, #Line#, #Condition */
   printf_filtered (_("GPU breakpoint %d ("), b->number);
   /* Print the line */
@@ -10056,6 +9955,111 @@ create_breakpoint_hsail(struct gdbarch *gdbarch,
 #endif /* HSAIL_PC_BP */
 
   return 0;
+}
+
+/* Logic to parse the breakpoint request from CLI
+ *
+ */
+static int
+parse_cli_create_breakpoint_hsail(struct gdbarch *gdbarch,
+					 char *arg, int internal,
+					 const struct breakpoint_ops *ops)
+{
+  struct breakpoint *b = NULL;
+  struct ui_out *uiout = current_uiout;
+
+  int hsail_line_num = -1;
+  int facilities_ret_code = 0;
+
+  HwDbgInfo_debug hsail_facilities = NULL;
+  HsailBreakpointRequest hsail_bp_request;
+  HsailBreakpointType hsail_bp_type = HSAIL_BP_TYPE_UNKNOWN;
+
+  b = XNEW (struct breakpoint);
+  gdb_assert(NULL != b);
+  memset (b, 0, sizeof (*b));
+
+  b->ops = ops;
+  b->type = bp_hsail;
+  b->related_breakpoint = b;
+  /*
+   * The below initialization steps have been done as per
+   * init_raw_breakpoint_without_location (struct breakpoint *b,
+                      struct gdbarch *gdbarch,
+                      enum bptype bptype,
+                      const struct breakpoint_ops *ops)
+   */
+  b->gdbarch = gdbarch;
+  b->language = current_language->la_language;
+  b->input_radix = input_radix;
+  b->thread = -1;
+  b->enable_state = bp_enabled;
+  b->next = 0;
+  b->silent = 0;
+  b->ignore_count = 0;
+  b->commands = NULL;
+  b->frame_id = null_frame_id;
+  b->condition_not_parsed = 0;
+  b->py_bp_object = NULL;
+
+  b->hsail_bp_request = (HsailBreakpointRequest*)xmalloc(sizeof(HsailBreakpointRequest));
+  gdb_assert(NULL != b->hsail_bp_request);
+  memset(b->hsail_bp_request, 0, sizeof(HsailBreakpointRequest));
+
+  b->hsail_bp_request->type = HSAIL_BP_TYPE_UNKNOWN;
+  /* Added for info breakpoints, so that "info bre" does not say "del" for the bp
+   *
+   * Dont touch sounds more correct anyways since we dont want to gdb to mess
+   * with HSAIL breakpoints by deleting or recreating on hit
+   * */
+  b->disposition = disp_donttouch;
+
+  b->hsail_bp_request->gdb_bkpt = b;
+  /*
+   * \todo Perhaad Note: This ifdef is only added for now since I
+   * are working on two places, the agent (for statistics)
+   * and on line information resolving.
+   * The ifdef allows me to quickly change this functions behavior
+   */
+
+  /* #define HSAIL_PC_BP */
+
+#ifdef HSAIL_PC_BP
+  /* This declaration will warn if the pragma is set.
+   * But its only an internal usage option and removes the confusion between
+   * hsail_pc and hsail_line_num
+   * */
+  int hsail_pc = -1;
+  /* This version should only accept the hsail:123 and hsail:file_name:123 formats
+   * (and ignore the file name in the second case: */
+  memset(&hsail_bp_req, 0, sizeof(HsailBreakpointRequest));
+  if (hsail_parse_breakpoint_request(arg, &hsail_bp_req))
+    {
+      if (HSAIL_BP_TYPE_SOURCE_LOCATION == hsail_bp_req.type)
+	{
+	  /* Choose a number divisible by 4 and valid op
+	   * We need a PC divisible by 4 since we can only set a breakpoint
+	   * on a PC divisible by 4
+	   */
+	  hsail_pc = (int)hsail_bp_req.bp.source_location.line_num;
+	  gdb_assert(hsail_pc != -1);
+	  gdb_assert(hsail_pc % 4 == 0);
+	  b->hsail_pc = hsail_pc;
+	}
+    }
+  hsail_clear_bp_request(&hsail_bp_req);
+
+#endif /* HSAIL_PC_BP */
+
+  /* Attempt to parse the request. Since we used the same function to check if
+   * this is an HSAIL breakpoint, this function will only fail if we're out of
+   * memory or something unexpected happened: */
+  if (!hsail_breakpoint_parse_bp_request(arg, &hsail_bp_request))
+    {
+      return -1;
+    }
+
+  return create_breakpoint_hsail(b	, &hsail_bp_request, internal);
 }
 
 static int
@@ -10204,7 +10208,7 @@ create_breakpoint (struct gdbarch *gdbarch,
   /* Check for hsail breakpoint and leave from here if so */
   if (is_hsail_breakpoint(arg))
   {
-      create_breakpoint_hsail(gdbarch,arg,internal,ops);
+      parse_cli_create_breakpoint_hsail(gdbarch,arg,internal,ops);
       return 1;
   }
 
