@@ -466,7 +466,7 @@ void* hsail_tdep_map_wave_buffer(void)
 
   if (shmid <= 0)
     {
-      ui_out_text(uiout, "wave info buffer mapping: shmid is invalid\n");
+      //ui_out_text(uiout, "wave info buffer mapping: shmid is invalid\n");
     }
 
   gdb_assert(shmid > 0);

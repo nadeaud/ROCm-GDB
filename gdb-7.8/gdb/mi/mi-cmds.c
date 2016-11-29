@@ -23,6 +23,7 @@
 #include "mi-cmds.h"
 #include <string.h>
 #include "mi-main.h"
+#include "hsail-cmd.h"
 
 extern void _initialize_mi_cmds (void);
 
@@ -177,6 +178,8 @@ static struct mi_cmd mi_cmds[] =
   DEF_MI_CMD_MI ("var-show-attributes", mi_cmd_var_show_attributes),
   DEF_MI_CMD_MI ("var-show-format", mi_cmd_var_show_format),
   DEF_MI_CMD_MI ("var-update", mi_cmd_var_update),
+  DEF_MI_CMD_MI ("hsail-waves-info", mi_hsail_thread_info),
+  DEF_MI_CMD_MI ("hsail-wave-group", mi_hsail_wave_group),
   { NULL, }
 };
 

@@ -43,5 +43,9 @@ bool hsail_command_get_argument(const char* cmdInfo, const char* argName, unsign
 
 bool hsail_cmd_get_show_isa_option(void);
 
+void mi_hsail_thread_info (char *command, char **argv, int argc);
+
+void mi_hsail_wave_group (char *command, char **argv, int argc);
+
 #endif
 

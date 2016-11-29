@@ -584,6 +584,97 @@ static void hsail_build_workgroups_vector(void)
   /* release the wave buffer */
   hsail_tdep_unmap_shm_buffer((void*)wave_info_buffer);
 }
+void
+hsail_mi_print_wave_group (struct ui_out *uiout)
+{
+  int i;
+  struct cleanup *cleanups;
+  uint32_t num_groups = 0;
+  int num_waves = hsail_tdep_get_active_wave_count();
+  char wgNameBuffer[20];
+  HsailAgentWaveInfo* wave_info_buffer = (HsailAgentWaveInfo*)hsail_tdep_map_wave_buffer();
+
+  if (wave_info_buffer == NULL)
+    {
+      return;
+    }
+
+  for (i = 0; i < num_waves; i++)
+    {
+      if (num_groups < wave_info_buffer[i].workGroupId.x)
+	{
+	  num_groups = wave_info_buffer[i].workGroupId.x;
+	}
+    }
+
+  cleanups = make_cleanup_ui_out_list_begin_end (uiout, "workgroups");
+
+  for (i = 0; i < num_groups; i++)
+    {
+      snprintf(wgNameBuffer, 20, "%d", i);
+      struct cleanup *tuple_clean = make_cleanup_ui_out_tuple_begin_end(uiout, NULL);
+      ui_out_field_string(uiout, "id", wgNameBuffer);
+      do_cleanups(tuple_clean);
+    }
+
+  do_cleanups(cleanups);
+  hsail_tdep_unmap_shm_buffer((void*)wave_info_buffer);
+}
+
+
+void hsail_mi_print_waves (struct ui_out *uiout, int xId)
+{
+  HsailAgentWaveInfo* wave_info_buffer = (HsailAgentWaveInfo*)hsail_tdep_map_wave_buffer();
+
+  struct cleanup *old_chain;
+  int i, num_waves;
+  union WavefrontSlots
+  {
+    struct
+    {
+      uint32_t wave_id:4;   // [0:3]
+      uint32_t simd_id:2;   // [4:5]
+      uint32_t:2;
+      uint32_t cu_id:4;     // [8:11]
+      uint32_t sh_id:1;     // [12]
+      uint32_t se_id:2;     // [13:14]
+      uint32_t:17;
+    } bits;
+    uint32_t u32All;
+  };
+  union WavefrontSlots waveSlots = {{0}};
+
+  if(wave_info_buffer == NULL)
+    return;
+  
+  num_waves = hsail_tdep_get_active_wave_count();  
+  old_chain = make_cleanup_restore_current_thread ();
+  make_cleanup_ui_out_list_begin_end  (uiout, "hsail-waves");
+  for(i = 0 ; i < num_waves ; i++)
+    {
+      if(xId != -1 && xId != wave_info_buffer[i].workGroupId.x)
+	continue;
+
+      struct cleanup *chain2;
+      chain2 = make_cleanup_ui_out_tuple_begin_end(uiout, NULL);
+
+      ui_out_field_int(uiout, "wgX", wave_info_buffer[i].workGroupId.x);
+      ui_out_field_int(uiout, "wgY", wave_info_buffer[i].workGroupId.y);
+      ui_out_field_int(uiout, "wgZ", wave_info_buffer[i].workGroupId.z);
+
+      waveSlots.u32All = wave_info_buffer[i].waveAddress;
+      ui_out_field_int (uiout, "stream-engine", waveSlots.bits.se_id);
+      ui_out_field_int (uiout, "compute-unit", waveSlots.bits.cu_id);
+      ui_out_field_int (uiout, "simdId", waveSlots.bits.simd_id);
+      ui_out_field_int (uiout, "waveId", waveSlots.bits.wave_id);
+      ui_out_field_string (uiout, "state", "stopped");
+      
+      do_cleanups (chain2);
+    }
+  /* release the wave buffer */
+  do_cleanups (old_chain);
+  hsail_tdep_unmap_shm_buffer((void*)wave_info_buffer);
+}
 
 void hsail_print_workgroups_info (HsailWaveDim3 active_work_group, struct ui_out* uiout, int from_tty)
 {
