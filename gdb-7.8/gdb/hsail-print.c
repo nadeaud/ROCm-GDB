@@ -611,8 +611,8 @@ hsail_mi_print_wave_group (struct ui_out *uiout)
 
   for (i = 0; i < num_groups; i++)
     {
-      snprintf(wgNameBuffer, 20, "%d", i);
       struct cleanup *tuple_clean = make_cleanup_ui_out_tuple_begin_end(uiout, NULL);
+      snprintf(wgNameBuffer, 20, "%d", i);
       ui_out_field_string(uiout, "id", wgNameBuffer);
       do_cleanups(tuple_clean);
     }
@@ -628,6 +628,7 @@ void hsail_mi_print_waves (struct ui_out *uiout, int xId)
 
   struct cleanup *old_chain;
   int i, num_waves;
+  char buffer[60] = "";
   union WavefrontSlots
   {
     struct
@@ -666,7 +667,8 @@ void hsail_mi_print_waves (struct ui_out *uiout, int xId)
       ui_out_field_int (uiout, "stream-engine", waveSlots.bits.se_id);
       ui_out_field_int (uiout, "compute-unit", waveSlots.bits.cu_id);
       ui_out_field_int (uiout, "simdId", waveSlots.bits.simd_id);
-      ui_out_field_int (uiout, "waveId", waveSlots.bits.wave_id);
+      snprintf(buffer, 60, "0x%x", wave_info_buffer[i].waveAddress);
+      ui_out_field_string(uiout, "waveId", buffer);
       ui_out_field_string (uiout, "state", "stopped");
       
       do_cleanups (chain2);
