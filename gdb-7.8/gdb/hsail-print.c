@@ -585,7 +585,7 @@ static void hsail_build_workgroups_vector(void)
   hsail_tdep_unmap_shm_buffer((void*)wave_info_buffer);
 }
 void
-hsail_mi_print_wave_group (struct ui_out *uiout)
+hsail_mi_print_wave_group (struct ui_out *uiout, int xId, int yId)
 {
   int i;
   struct cleanup *cleanups;
@@ -599,11 +599,32 @@ hsail_mi_print_wave_group (struct ui_out *uiout)
       return;
     }
 
-  for (i = 0; i < num_waves; i++)
+  if (xId != -1 && yId == -1)
     {
-      if (num_groups < wave_info_buffer[i].workGroupId.x)
+      for (i = 0; i < num_waves; i++)
 	{
-	  num_groups = wave_info_buffer[i].workGroupId.x;
+	  if (num_groups < wave_info_buffer[i].workGroupId.y && xId == wave_info_buffer[i].workGroupId.x)
+	    {
+	      num_groups = wave_info_buffer[i].workGroupId.y;
+	    }
+	}
+    }
+  else if (xId != -1 && yId != -1)
+    {
+      if (num_groups < wave_info_buffer[i].workGroupId.z &&
+	  xId == wave_info_buffer[i].workGroupId.x && yId == wave_info_buffer[i].workGroupId.y)
+	{
+	  num_groups = wave_info_buffer[i].workGroupId.z;
+	}
+    }
+  else
+    {
+      for (i = 0; i < num_waves; i++)
+	{
+	  if (num_groups < wave_info_buffer[i].workGroupId.x)
+	    {
+	      num_groups = wave_info_buffer[i].workGroupId.x;
+	    }
 	}
     }
 
@@ -622,7 +643,7 @@ hsail_mi_print_wave_group (struct ui_out *uiout)
 }
 
 
-void hsail_mi_print_waves (struct ui_out *uiout, int xId)
+void hsail_mi_print_waves (struct ui_out *uiout, int xId, int yId, int zId)
 {
   HsailAgentWaveInfo* wave_info_buffer = (HsailAgentWaveInfo*)hsail_tdep_map_wave_buffer();
 
@@ -653,7 +674,11 @@ void hsail_mi_print_waves (struct ui_out *uiout, int xId)
   make_cleanup_ui_out_list_begin_end  (uiout, "hsail-waves");
   for(i = 0 ; i < num_waves ; i++)
     {
-      if(xId != -1 && xId != wave_info_buffer[i].workGroupId.x)
+      if (xId != -1 && xId != wave_info_buffer[i].workGroupId.x)
+	continue;
+      if (yId != -1 && yId != wave_info_buffer[i].workGroupId.y)
+	continue;
+      if (zId != -1 && zId != wave_info_buffer[i].workGroupId.z)
 	continue;
 
       struct cleanup *chain2;

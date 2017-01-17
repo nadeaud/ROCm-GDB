@@ -225,6 +225,7 @@ lookup_table (const char *command)
       index = ((index << 6) + (unsigned int) *chp) % MI_TABLE_SIZE;
     }
 
+  struct mi_cmd **first_entry = &mi_table[index];
   while (1)
     {
       struct mi_cmd **entry = &mi_table[index];
@@ -240,6 +241,10 @@ lookup_table (const char *command)
 	  return entry;		/* found */
 	}
       index = (index + 1) % MI_TABLE_SIZE;
+      if (first_entry == entry)
+	{
+	  // Problem : we looked through all the entries
+	}
       stats.rehash++;
     }
 }

@@ -243,13 +243,19 @@ mi_hsail_thread_info (char *command, char **argv, int argc)
       ids[i] = atoi(argv[i]);
   }
   struct ui_out *uiout = current_uiout;
-  hsail_mi_print_waves(uiout, ids[0]);
+  hsail_mi_print_waves(uiout, ids[0], ids[1], ids[2]);
 }
 
 void
 mi_hsail_wave_group (char *command, char **argv, int argc)
 {
-  hsail_mi_print_wave_group(current_uiout);
+  int i;
+  int ids[3] = {-1, -1, -1};
+  for (i = 0; i < argc && argc < 3; i++)
+    {
+      ids[i] = atoi(argv[i]);
+    }
+  hsail_mi_print_wave_group(current_uiout, ids[0], ids[1]);
 }
 
 static void hsail_info_command(char *arg, int from_tty)

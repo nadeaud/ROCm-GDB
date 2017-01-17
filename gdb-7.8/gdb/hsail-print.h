@@ -57,8 +57,8 @@ void hsail_print_workitem_info (HsailWaveDim3 active_work_group, HsailWaveDim3 a
 
 bool hsail_print_gpu_disassembly(const char* arg);
 
-void hsail_mi_print_waves (struct ui_out *uiout, int xId);
+void hsail_mi_print_waves (struct ui_out *uiout, int xId, int yId, int zId);
 
-void hsail_mi_print_wave_group (struct ui_out *uiout);
+void hsail_mi_print_wave_group (struct ui_out *uiout, int xId, int yId);
 
 #endif
