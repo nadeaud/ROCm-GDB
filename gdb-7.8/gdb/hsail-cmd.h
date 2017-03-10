@@ -47,5 +47,7 @@ void mi_hsail_thread_info (char *command, char **argv, int argc);
 
 void mi_hsail_wave_group (char *command, char **argv, int argc);
 
+void mi_hsail_focus_selection (char *command, char **argv, int argc);
+
 #endif
 

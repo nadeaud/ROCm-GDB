@@ -40,6 +40,7 @@
 #include "expression.h"
 #include "gdb_assert.h"
 #include "value.h"
+#include "mi/mi-getopt.h"
 
 /* rocm-gdb headers */
 #include "hsail-cmd.h"
@@ -239,10 +240,11 @@ mi_hsail_thread_info (char *command, char **argv, int argc)
 {
   int i;
   int ids[3] = {-1, -1, -1};
+  struct ui_out *uiout = current_uiout;
+
   for(i = 0; i < argc && argc < 3; i++) {
       ids[i] = atoi(argv[i]);
   }
-  struct ui_out *uiout = current_uiout;
   hsail_mi_print_waves(uiout, ids[0], ids[1], ids[2]);
 }
 
@@ -256,6 +258,68 @@ mi_hsail_wave_group (char *command, char **argv, int argc)
       ids[i] = atoi(argv[i]);
     }
   hsail_mi_print_wave_group(current_uiout, ids[0], ids[1]);
+}
+
+void
+mi_hsail_focus_selection (char *command, char **argv, int argc)
+{
+  int i, oind = 0;
+  char *oarg;
+  enum opt
+  {
+    INSERT,
+  };
+  static const struct mi_opt opts[] =
+      {
+	  {"i", INSERT, 1},
+	  { 0, 0, 0}
+      };
+
+  while (1)
+    {
+      int opt = mi_getopt ("-processes-selection", argc, argv,
+			   opts, &oind, &oarg);
+      if (opt < 0)
+	break;
+      switch ((enum opt) opt)
+      {
+	case INSERT:
+	  insert_border_selection(oarg);
+	  continue;
+      }
+    }
+
+  for (i = 0; i < argc; i++)
+    {
+      printf("%s\n", argv[i]);
+    }
+}
+
+void
+insert_border_selection (char *arg)
+{
+  char axis;
+  int min, max;
+  char *cmin;
+
+  if (*arg != 'x' && *arg != 'y' && *arg != 'z')
+    return;
+
+  axis = *arg++;
+
+  if (*arg != ':')
+    return;
+
+  arg++;
+
+  cmin = strsep (&arg, ":");
+  if (cmin == NULL)
+    return;
+
+  min = atoi (cmin);
+  max = atoi (arg);
+
+  printf("Found axis %c with %d,%d\n", axis, min, max);
 }
 
 static void hsail_info_command(char *arg, int from_tty)
