@@ -584,15 +584,22 @@ static void hsail_build_workgroups_vector(void)
   /* release the wave buffer */
   hsail_tdep_unmap_shm_buffer((void*)wave_info_buffer);
 }
+
 void
 hsail_mi_print_wave_group (struct ui_out *uiout, int xId, int yId)
 {
-  int i;
+  int i, num_ids = 0;
+  uint32_t workgroup_axis_size = 0;
   struct cleanup *cleanups;
-  uint32_t num_groups = 0;
   int num_waves = hsail_tdep_get_active_wave_count();
-  char wgNameBuffer[20];
+  char string_buffer[20];
   HsailAgentWaveInfo* wave_info_buffer = (HsailAgentWaveInfo*)hsail_tdep_map_wave_buffer();
+  struct hsail_dispatch *active_dispatch = hsail_kernel_active_dispatch();
+
+  if (wave_info_buffer == NULL || active_dispatch == NULL)
+    return;
+
+  uint32_t *id_values = (uint32_t*)malloc(sizeof(uint32_t)*num_waves);
 
   if (wave_info_buffer == NULL)
     {
@@ -601,44 +608,110 @@ hsail_mi_print_wave_group (struct ui_out *uiout, int xId, int yId)
 
   if (xId != -1 && yId == -1)
     {
+      workgroup_axis_size = active_dispatch->work_groups_size.y;
       for (i = 0; i < num_waves; i++)
 	{
-	  if (num_groups < wave_info_buffer[i].workGroupId.y && xId == wave_info_buffer[i].workGroupId.x)
+	  if (check_wave_in_focus(&wave_info_buffer[i]) != TRUE)
+	    continue;
+
+	  if (xId == wave_info_buffer[i].workGroupId.x)
 	    {
-	      num_groups = wave_info_buffer[i].workGroupId.y;
+	      id_values[num_ids++] = wave_info_buffer[i].workGroupId.y;
 	    }
 	}
     }
   else if (xId != -1 && yId != -1)
     {
-      if (num_groups < wave_info_buffer[i].workGroupId.z &&
-	  xId == wave_info_buffer[i].workGroupId.x && yId == wave_info_buffer[i].workGroupId.y)
+      workgroup_axis_size = active_dispatch->work_groups_size.z;
+      for (i = 0; i < num_waves; i++)
 	{
-	  num_groups = wave_info_buffer[i].workGroupId.z;
+	  if (check_wave_in_focus(&wave_info_buffer[i]) != TRUE)
+	    continue;
+	  if (xId == wave_info_buffer[i].workGroupId.x &&
+	      yId == wave_info_buffer[i].workGroupId.y)
+	    {
+	      id_values[num_ids++] = wave_info_buffer[i].workGroupId.z;
+	    }
 	}
     }
   else
     {
+      workgroup_axis_size = active_dispatch->work_groups_size.x;
       for (i = 0; i < num_waves; i++)
 	{
-	  if (num_groups < wave_info_buffer[i].workGroupId.x)
-	    {
-	      num_groups = wave_info_buffer[i].workGroupId.x;
-	    }
+	  if (check_wave_in_focus(&wave_info_buffer[i]) != TRUE)
+	    continue;
+
+	  id_values[num_ids++] = wave_info_buffer[i].workGroupId.x;
 	}
     }
 
   cleanups = make_cleanup_ui_out_list_begin_end (uiout, "workgroups");
 
-  for (i = 0; i < num_groups; i++)
+  for (i = 0; i < num_ids; i++)
     {
       struct cleanup *tuple_clean = make_cleanup_ui_out_tuple_begin_end(uiout, NULL);
-      snprintf(wgNameBuffer, 20, "%d", i);
-      ui_out_field_string(uiout, "id", wgNameBuffer);
+      snprintf(string_buffer, 20, "%d", id_values[i]);
+      ui_out_field_string(uiout, "id", string_buffer);
+
+      snprintf (string_buffer, 20, "%u", workgroup_axis_size*id_values[i]);
+      ui_out_field_string(uiout, "min", string_buffer);
+      snprintf (string_buffer, 20, "%u", workgroup_axis_size*(id_values[i] + 1) - 1);
+      ui_out_field_string(uiout, "max", string_buffer);
+
       do_cleanups(tuple_clean);
     }
 
+  free (id_values);
+
   do_cleanups(cleanups);
+  hsail_tdep_unmap_shm_buffer((void*)wave_info_buffer);
+}
+
+void hsail_mi_print_work_items(struct ui_out *uiout, char *wave_id) {
+  int i, j, nExec = 64;
+  char buf[15];
+  char address[10];
+  int num_waves = hsail_tdep_get_active_wave_count();
+  HsailAgentWaveInfo* wave_info_buffer = (HsailAgentWaveInfo*)hsail_tdep_map_wave_buffer();
+  struct hsail_dispatch *active_dispatch = hsail_kernel_active_dispatch();
+
+  if (wave_info_buffer == NULL || active_dispatch == NULL)
+    return;
+
+  make_cleanup_ui_out_list_begin_end  (uiout, "hsail-waves");
+  for (i = 0; i < num_waves; ++i)
+    {
+      snprintf(address, 10, "%x", wave_info_buffer[i].waveAddress);
+      if ( strncmp(address, wave_id, 10) == 0)
+	{
+	  uint32_t baseX = wave_info_buffer[i].workGroupId.x * active_dispatch->work_groups_size.x;
+	  uint32_t baseY = wave_info_buffer[i].workGroupId.y * active_dispatch->work_groups_size.y;
+	  uint32_t baseZ = wave_info_buffer[i].workGroupId.z * active_dispatch->work_groups_size.z;
+	  printf("\nFound wave %x, baseX is %u\n", wave_info_buffer[i].waveAddress, baseX);
+	  for (j = 0; j < nExec; j++)
+	    {
+	      struct cleanup *chain2;
+	      chain2 = make_cleanup_ui_out_tuple_begin_end(uiout, NULL);
+
+	      ui_out_field_int(uiout, "xId", wave_info_buffer[i].workItemId[j].x);
+	      ui_out_field_int(uiout, "yId", wave_info_buffer[i].workItemId[j].y);
+	      ui_out_field_int(uiout, "zId", wave_info_buffer[i].workItemId[j].z);
+
+	      snprintf(buf, 11, "%u", baseX + wave_info_buffer[i].workItemId[j].x);
+	      ui_out_field_string(uiout, "absXId", buf);
+	      snprintf(buf, 11, "%u", baseY + wave_info_buffer[i].workItemId[j].y);
+	      ui_out_field_string(uiout, "absYId", buf);
+	      snprintf(buf, 11, "%u", baseZ + wave_info_buffer[i].workItemId[j].z);
+	      ui_out_field_string(uiout, "absZId", buf);
+
+	      do_cleanups (chain2);
+	    }
+	  break;
+	}
+    }
+
+
   hsail_tdep_unmap_shm_buffer((void*)wave_info_buffer);
 }
 
@@ -647,9 +720,11 @@ void hsail_mi_print_waves (struct ui_out *uiout, int xId, int yId, int zId)
 {
   HsailAgentWaveInfo* wave_info_buffer = (HsailAgentWaveInfo*)hsail_tdep_map_wave_buffer();
 
-  struct cleanup *old_chain;
-  int i, num_waves;
+  struct cleanup *chain;
+  int i;
+  int num_waves = hsail_tdep_get_active_wave_count();
   char buffer[60] = "";
+  struct hsail_dispatch* active_dispatch = hsail_kernel_active_dispatch();
   union WavefrontSlots
   {
     struct
@@ -668,9 +743,13 @@ void hsail_mi_print_waves (struct ui_out *uiout, int xId, int yId, int zId)
 
   if(wave_info_buffer == NULL)
     return;
-  
-  num_waves = hsail_tdep_get_active_wave_count();  
-  old_chain = make_cleanup_restore_current_thread ();
+
+/*  chain = make_cleanup_ui_out_tuple_begin_end(uiout, "active-dispatch");
+  uit_out_field_int (uiout, "x", active_dispatch->work_groups_size.x);
+  uit_out_field_int (uiout, "y", active_dispatch->work_groups_size.y);
+  uit_out_field_int (uiout, "z", active_dispatch->work_groups_size.z);
+  do_cleanups(chain);
+  */
   make_cleanup_ui_out_list_begin_end  (uiout, "hsail-waves");
   for(i = 0 ; i < num_waves ; i++)
     {
@@ -679,6 +758,10 @@ void hsail_mi_print_waves (struct ui_out *uiout, int xId, int yId, int zId)
       if (yId != -1 && yId != wave_info_buffer[i].workGroupId.y)
 	continue;
       if (zId != -1 && zId != wave_info_buffer[i].workGroupId.z)
+	continue;
+
+      /* Check if a focus has been set and if this wave is in this focus. */
+      if (check_wave_in_focus (&wave_info_buffer[i]) != TRUE)
 	continue;
 
       struct cleanup *chain2;
@@ -692,14 +775,14 @@ void hsail_mi_print_waves (struct ui_out *uiout, int xId, int yId, int zId)
       ui_out_field_int (uiout, "stream-engine", waveSlots.bits.se_id);
       ui_out_field_int (uiout, "compute-unit", waveSlots.bits.cu_id);
       ui_out_field_int (uiout, "simdId", waveSlots.bits.simd_id);
-      snprintf(buffer, 60, "0x%x", wave_info_buffer[i].waveAddress);
+      snprintf(buffer, 60, "%x", wave_info_buffer[i].waveAddress);
       ui_out_field_string(uiout, "waveId", buffer);
       ui_out_field_string (uiout, "state", "stopped");
       
       do_cleanups (chain2);
     }
   /* release the wave buffer */
-  do_cleanups (old_chain);
+  //do_cleanups (old_chain);
   hsail_tdep_unmap_shm_buffer((void*)wave_info_buffer);
 }
 

@@ -81,6 +81,15 @@ struct thread_array_cleanup
   int count;
 };
 
+struct thread_chain
+{
+  ptid_t ptid;
+  /* GDB id for the thread. */
+  int id;
+  struct thread_chain *next;
+};
+
+static struct thread_chain *focus_head = NULL;
 
 struct thread_info*
 inferior_thread (void)
@@ -827,6 +836,9 @@ print_thread_info (struct ui_out *uiout, char *requested_threads, int pid)
 	  if (tp->state == THREAD_EXITED)
 	    continue;
 
+	  if (check_thread_in_filter (tp->ptid) == 1)
+	    continue;
+
 	  ++n_threads;
 	}
 
@@ -857,6 +869,9 @@ print_thread_info (struct ui_out *uiout, char *requested_threads, int pid)
 
       if (!number_is_in_list (requested_threads, tp->num))
 	continue;
+
+      if (check_thread_in_filter (tp->ptid) == 1)
+      	    continue;
 
       if (pid != -1 && ptid_get_pid (tp->ptid) != pid)
 	{
@@ -1516,6 +1531,91 @@ thread_id_make_value (struct gdbarch *gdbarch, struct internalvar *var,
   return value_from_longest (builtin_type (gdbarch)->builtin_int,
 			     (tp ? tp->num : 0));
 }
+
+int check_thread_in_filter (ptid_t ptid)
+{
+  struct thread_chain *th;
+
+  for (th = focus_head; th != NULL; th = th->next)
+    {
+      if (ptid_equal(ptid, th->ptid))
+	return 1;
+    }
+  return 0;
+}
+
+int check_thread_in_filter_id (int id)
+{
+  struct thread_chain *th;
+  for (th = focus_head; th != NULL; th = th->next)
+    {
+      if (id == th->id)
+	return 1;
+    }
+  return 0;
+}
+
+void destroy_filter ()
+{
+  struct thread_chain *th, *old;
+
+  th = focus_head;
+
+  while (th != NULL)
+    {
+      old = th;
+      th = th->next;
+      free (old);
+    }
+
+  focus_head = NULL;
+}
+
+void new_thread_in_filter (ptid_t ptid, int id)
+{
+  struct thread_chain *new, *last = focus_head;
+
+  /* Find the last current item. */
+  while (last != NULL)
+    {
+      if (last->next == NULL)
+	break;
+
+      last = last->next;
+    }
+
+  /* last should be NULL only if the list is empty. */
+
+  new = (struct thread_chain *) malloc (sizeof (struct thread_chain));
+  new->next = NULL;
+  new->ptid.lwp = ptid.lwp;
+  new->ptid.pid = ptid.pid;
+  new->ptid.tid = ptid.tid;
+  new->id = id;
+
+  if (last == NULL)
+    {
+      focus_head = new;
+    }
+  else
+    {
+      last->next = new;
+    }
+}
+
+void add_thread_in_filter (int id)
+{
+  struct thread_info *tp;
+  ALL_NON_EXITED_THREADS(tp)
+  {
+    if (tp->num == id)
+      {
+	new_thread_in_filter (tp->ptid, id);
+	return;
+      }
+  }
+}
+
 
 /* Commands with a prefix of `thread'.  */
 struct cmd_list_element *thread_cmd_list = NULL;

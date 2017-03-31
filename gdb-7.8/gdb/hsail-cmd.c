@@ -58,6 +58,27 @@
 /* Chain containing all defined hsail subcommands.  */
 struct cmd_list_element *hsailcmdlist;
 
+struct struct_hsail_focus {
+  bool enabled;
+
+  bool xMinEnabled;
+  uint32_t xMin;
+  bool xMaxEnabled;
+  uint32_t xMax;
+
+  bool yMinEnabled;
+  uint32_t yMin;
+  bool yMaxEnabled;
+  uint32_t yMax;
+
+  bool zMinEnabled;
+  uint32_t zMin;
+  bool zMaxEnabled;
+  uint32_t zMax;
+};
+
+static struct struct_hsail_focus hsail_focus = { FALSE, FALSE, -1, FALSE, -1, FALSE, -1, FALSE, -1, FALSE, -1, FALSE, -1};
+
 /* forward declaration of functions */
 static void hsail_info_command(char *arg, int from_tty);
 static void hsail_cmd_set_options_help(void);
@@ -242,7 +263,7 @@ mi_hsail_thread_info (char *command, char **argv, int argc)
   int ids[3] = {-1, -1, -1};
   struct ui_out *uiout = current_uiout;
 
-  for(i = 0; i < argc && argc < 3; i++) {
+  for(i = 0; i < argc && i < 3; i++) {
       ids[i] = atoi(argv[i]);
   }
   hsail_mi_print_waves(uiout, ids[0], ids[1], ids[2]);
@@ -253,7 +274,7 @@ mi_hsail_wave_group (char *command, char **argv, int argc)
 {
   int i;
   int ids[3] = {-1, -1, -1};
-  for (i = 0; i < argc && argc < 3; i++)
+  for (i = 0; i < argc && i < 3; i++)
     {
       ids[i] = atoi(argv[i]);
     }
@@ -261,46 +282,158 @@ mi_hsail_wave_group (char *command, char **argv, int argc)
 }
 
 void
-mi_hsail_focus_selection (char *command, char **argv, int argc)
+mi_hsail_work_item_list (char *command, char **argv, int argc)
 {
-  int i, oind = 0;
-  char *oarg;
-  enum opt
-  {
-    INSERT,
-  };
-  static const struct mi_opt opts[] =
-      {
-	  {"i", INSERT, 1},
-	  { 0, 0, 0}
-      };
-
-  while (1)
+  int i;
+  char *wave_id;
+  if (argc == 1)
     {
-      int opt = mi_getopt ("-processes-selection", argc, argv,
-			   opts, &oind, &oarg);
-      if (opt < 0)
-	break;
-      switch ((enum opt) opt)
-      {
-	case INSERT:
-	  insert_border_selection(oarg);
-	  continue;
-      }
+      wave_id = argv[0];
     }
-
-  for (i = 0; i < argc; i++)
-    {
-      printf("%s\n", argv[i]);
-    }
+  else
+    return;
+  hsail_mi_print_work_items(current_uiout, wave_id);
 }
 
-void
+/*bool
+check_wg_focus_x (uint32_t xId) {
+  if (hsail_focus.enabled != TRUE)
+        return TRUE;
+
+  struct hsail_dispatch* active_dispatch = hsail_kernel_active_dispatch();
+
+  uint32_t minX = xId * active_dispatch->work_groups_size.x;
+  uint32_t maxX = (xId + 1)* active_dispatch->work_groups_size.x - 1;
+
+  if (hsail_focus.xMax != -1 && minX > hsail_focus.xMax)
+    return FALSE;
+  if (hsail_focus.xMin != -1 && maxX < hsail_focus.xMin)
+    return FALSE;
+  return TRUE;
+}
+
+bool
+check_wg_focus_y (uint32_t yId) {
+  if (hsail_focus.enabled != TRUE)
+        return TRUE;
+
+  struct hsail_dispatch* active_dispatch = hsail_kernel_active_dispatch();
+
+  uint32_t minY = yId * active_dispatch->work_groups_size.y;
+  uint32_t maxY = (yId + 1)* active_dispatch->work_groups_size.y - 1;
+
+  if (hsail_focus.yMax != -1 && minY > hsail_focus.yMax)
+    return FALSE;
+  if (hsail_focus.yMin != -1 && maxY < hsail_focus.yMin)
+    return FALSE;
+  return TRUE;
+}
+
+bool
+check_wg_focus_z (uint32_t zId) {
+  if (hsail_focus.enabled != TRUE)
+        return TRUE;
+
+  struct hsail_dispatch* active_dispatch = hsail_kernel_active_dispatch();
+
+  uint32_t minZ = zId * active_dispatch->work_groups_size.z;
+  uint32_t maxZ = (zId + 1)* active_dispatch->work_groups_size.z - 1;
+
+  if (hsail_focus.zMax != -1 && minZ > hsail_focus.zMax)
+    return FALSE;
+  if (hsail_focus.zMin != -1 && maxZ < hsail_focus.zMin)
+    return FALSE;
+  return TRUE;
+}
+*/
+bool
+check_wave_in_focus_1 (HsailAgentWaveInfo *wave)
+{
+  int i;
+  uint32_t baseX, baseY, baseZ, maxX, maxY, maxZ;
+  uint32_t wiMaxX = 0, wiMaxY = 0, wiMaxZ = 0;
+  struct hsail_dispatch* active_dispatch = hsail_kernel_active_dispatch();
+
+  if (hsail_focus.enabled != TRUE)
+    return TRUE;
+
+  baseX = wave->workGroupId.x * active_dispatch->work_groups_size.x;
+  baseY = wave->workGroupId.y * active_dispatch->work_groups_size.y;
+  baseZ = wave->workGroupId.z * active_dispatch->work_groups_size.z;
+  maxX = (wave->workGroupId.x + 1) * active_dispatch->work_groups_size.x - 1;
+  maxY = (wave->workGroupId.y + 1) * active_dispatch->work_groups_size.y - 1;
+  maxZ = (wave->workGroupId.z + 1) * active_dispatch->work_groups_size.z - 1;
+
+  /* Check if the work-group is below the maximum. */
+
+  if ( (hsail_focus.xMaxEnabled && baseX > hsail_focus.xMax) ||
+      (hsail_focus.yMaxEnabled && baseY > hsail_focus.yMax) ||
+      (hsail_focus.zMaxEnabled && baseZ > hsail_focus.zMax) )
+    return FALSE;
+
+  if ( (hsail_focus.xMinEnabled && maxX < hsail_focus.xMin) ||
+        (hsail_focus.yMinEnabled && maxY < hsail_focus.yMin) ||
+        (hsail_focus.zMinEnabled && maxZ < hsail_focus.zMin) )
+      return FALSE;
+
+  if (hsail_focus.xMaxEnabled && baseX + wave->workItemId[0].x > hsail_focus.xMax)
+    return FALSE;
+  if (hsail_focus.yMaxEnabled && baseY + wave->workItemId[0].y > hsail_focus.yMax)
+      return FALSE;
+  if (hsail_focus.zMaxEnabled && baseZ + wave->workItemId[0].z > hsail_focus.zMax)
+      return FALSE;
+
+  /* Find the maximum valid item. */
+
+  for (i = 0; i < 64; i++)
+    {
+      if (wave->workItemId[i].x == -1 &&
+	  wave->workItemId[i].y == -1 &&
+	  wave->workItemId[i].z == -1)
+	break;
+
+      if (wave->workItemId[i].x > wiMaxX)
+	wiMaxX = wave->workItemId[i].x;
+      if (wave->workItemId[i].y > wiMaxY)
+      	wiMaxY = wave->workItemId[i].y;
+      if (wave->workItemId[i].z > wiMaxZ)
+      	wiMaxZ = wave->workItemId[i].z;
+    }
+
+  if (wiMaxX > maxX)
+    printf("Problem\n\n");
+
+  if (hsail_focus.xMinEnabled && wiMaxX + baseX < hsail_focus.xMin)
+    return FALSE;
+  if (hsail_focus.yMinEnabled && wiMaxY + baseY < hsail_focus.yMin)
+    return FALSE;
+  if (hsail_focus.zMinEnabled && wiMaxZ + baseZ < hsail_focus.zMin)
+    return FALSE;
+
+  return TRUE;
+}
+
+bool
+check_wave_in_focus (HsailAgentWaveInfo *wave) {
+  bool ret = check_wave_in_focus_1 (wave);
+  if ( ret == TRUE)
+    printf("wave %x, (%u,%u,%u) OK\n", wave->waveAddress, wave->workGroupId.x, wave->workGroupId.y, wave->workGroupId.z);
+
+  if ( ret == FALSE)
+      printf("wave %x, (%u,%u,%u) REJECTED\n", wave->waveAddress, wave->workGroupId.x, wave->workGroupId.y, wave->workGroupId.z);
+
+  return ret;
+}
+
+
+static void
 insert_border_selection (char *arg)
 {
   char axis;
-  int min, max;
-  char *cmin;
+  int64_t min, max;
+  char *cmin, *umin, *umax;
+  //char *str;
+  char *const start = arg;
 
   if (*arg != 'x' && *arg != 'y' && *arg != 'z')
     return;
@@ -316,10 +449,124 @@ insert_border_selection (char *arg)
   if (cmin == NULL)
     return;
 
-  min = atoi (cmin);
-  max = atoi (arg);
+  umin = cmin;
+  umax = arg;
 
-  printf("Found axis %c with %d,%d\n", axis, min, max);
+  min = strtoll (cmin, NULL, 10);
+  max = strtoll (arg, NULL, 10);
+  //min = strtoul (cmin, &str, 10);
+  //max = strtoul (arg, &str, 10);
+
+  if (*start == 'x')
+    {
+      if (min == -1)
+	{
+	  hsail_focus.xMinEnabled = FALSE;
+	}
+      else
+	{
+	  hsail_focus.xMinEnabled = TRUE;
+	  hsail_focus.xMin = strtoul (umin, NULL, 10);
+	}
+      if (max == -1)
+	{
+	  hsail_focus.xMaxEnabled = FALSE;
+	}
+      else
+	{
+	  hsail_focus.xMaxEnabled = TRUE;
+	  hsail_focus.xMax = strtoul (umax, NULL, 10);
+	}
+    }
+  else if (*start == 'y')
+    {
+      if (min == -1)
+	{
+	  hsail_focus.yMinEnabled = FALSE;
+	}
+      else
+	{
+	  hsail_focus.yMinEnabled = TRUE;
+	  hsail_focus.yMin = strtoul (umin, NULL, 10);
+	}
+      if (max == -1)
+	{
+	  hsail_focus.yMaxEnabled = FALSE;
+	}
+      else
+	{
+	  hsail_focus.yMaxEnabled = TRUE;
+	  hsail_focus.yMax = strtoul (umax, NULL, 10);
+	}
+    }
+  else if (*start == 'z')
+    {
+      if (min == -1)
+	{
+	  hsail_focus.zMinEnabled = FALSE;
+	}
+      else
+	{
+	  hsail_focus.zMinEnabled = TRUE;
+	  hsail_focus.zMin = strtoul (umin, NULL, 10);
+	}
+      if (max == -1)
+	{
+	  hsail_focus.zMaxEnabled = FALSE;
+	}
+      else
+	{
+	  hsail_focus.zMaxEnabled = TRUE;
+	  hsail_focus.zMax = strtoul (umax, NULL, 10);
+	}
+    }
+}
+
+void
+mi_hsail_focus_selection (char *command, char **argv, int argc)
+{
+  int i, thread_id = 0, oind = 0;
+  char *oarg;
+  enum opt
+  {
+    INSERT,
+    EXCLUDE_THREAD
+  };
+  static const struct mi_opt opts[] =
+      {
+	  {"i", INSERT, 1},
+	  {"e", EXCLUDE_THREAD, 1},
+	  { 0, 0, 0}
+      };
+
+  while (1)
+    {
+      int opt = mi_getopt ("-processes-selection", argc, argv,
+			   opts, &oind, &oarg);
+      if (opt < 0)
+	break;
+      switch ((enum opt) opt)
+      {
+	case INSERT:
+	  insert_border_selection(oarg);
+	  continue;
+	case EXCLUDE_THREAD:
+	  thread_id = atoi (oarg);
+	  add_thread_in_filter (thread_id);
+	  continue;
+      }
+    }
+
+  if ( !hsail_focus.xMinEnabled && !hsail_focus.xMaxEnabled &&
+      !hsail_focus.yMinEnabled && !hsail_focus.yMaxEnabled &&
+      !hsail_focus.zMinEnabled && !hsail_focus.zMaxEnabled)
+    {
+      hsail_focus.enabled = FALSE;
+    }
+  else
+    {
+      hsail_focus.enabled = TRUE;
+    }
 }
 
 static void hsail_info_command(char *arg, int from_tty)

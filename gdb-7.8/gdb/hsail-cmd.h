@@ -49,5 +49,15 @@ void mi_hsail_wave_group (char *command, char **argv, int argc);
 
 void mi_hsail_focus_selection (char *command, char **argv, int argc);
 
+void mi_hsail_work_item_list (char *command, char **argv, int argc);
+
+bool check_wave_in_focus (HsailAgentWaveInfo *wave);
+
+/*bool check_wg_focus_x (uint32_t xId);
+
+bool check_wg_focus_y (uint32_t xId);
+
+bool check_wg_focus_z (uint32_t xId);
+*/
 #endif
 

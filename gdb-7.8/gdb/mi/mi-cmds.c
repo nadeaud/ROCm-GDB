@@ -24,6 +24,7 @@
 #include <string.h>
 #include "mi-main.h"
 #include "hsail-cmd.h"
+#include "gdbthread.h"
 
 extern void _initialize_mi_cmds (void);
 
@@ -181,6 +182,7 @@ static struct mi_cmd mi_cmds[] =
   DEF_MI_CMD_MI ("hsail-waves-info", mi_hsail_thread_info),
   DEF_MI_CMD_MI ("hsail-wave-group", mi_hsail_wave_group),
   DEF_MI_CMD_MI ("processes-selection", mi_hsail_focus_selection),
+  DEF_MI_CMD_MI ("hsail-work-item-list", mi_hsail_work_item_list),
   { NULL, }
 };
 

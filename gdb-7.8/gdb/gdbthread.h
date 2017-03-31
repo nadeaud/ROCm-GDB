@@ -422,6 +422,19 @@ int pc_in_thread_step_range (CORE_ADDR pc, struct thread_info *thread);
  * Get the ID of the present focus thread */
 ptid_t thread_get_focus_inferior_ptid();
 
+/* Functions to verify if the thread if in the filter (i.e. events should
+ * be ignored for this thread).
+ */
+extern int check_thread_in_filter_id (int id);
+
+extern int check_thread_in_filter (ptid_t ptid);
+
+/* Add a thread to the exclusion filter. */
+extern void add_thread_in_filter (int id);
+
+/* Reset the thread exclusion filter. */
+extern void destroy_filter (void);
+
 extern struct thread_info *thread_list;
 
 #endif /* GDBTHREAD_H */

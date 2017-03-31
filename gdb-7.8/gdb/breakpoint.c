@@ -5322,6 +5322,15 @@ bpstat_check_breakpoint_conditions (bpstat bs, ptid_t ptid)
       return;
     }
 
+  /* If the thread is in the thread filter, we should ignore the breakpoint
+   * we ignore the breakpoint hit and continue.
+   */
+  if (check_thread_in_filter(ptid) == 1)
+    {
+      bs->stop = 0;
+      return;
+    }
+
   /* If this is a thread/task-specific breakpoint, don't waste cpu
      evaluating the condition if this isn't the specified
      thread/task.  */
